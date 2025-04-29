@@ -74,10 +74,10 @@ If you would like to self-host Plane, please see our [deployment guide](https://
    ```
 3. Create your feature or fix branch you plan to work on using:
    ```
-   git checkout -b <feature-branch-name>
+   cp .env.example .env
+   pnpm install 
+   pnpm build
    ```
-4. Open the code on VSCode or similar equivalent IDE.
-5. Copy `.env.example` to `.env` files available in various folders.
 6. Run the docker command to initiate services:
    ```
    docker compose -f docker-compose.dev.yaml up -d
