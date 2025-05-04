@@ -15,16 +15,10 @@ import * as schema from "@ctrlplane/db/schema";
 import { JobStatus } from "@ctrlplane/validators/jobs";
 
 import type { Version } from "../manager/version-rule-engine.js";
-import type {
-  FilterRule,
-  Policy,
-  PreValidationRule,
-  RuleEngineContext,
-} from "../types.js";
+import type { FilterRule, Policy, PreValidationRule } from "../types.js";
 import type { ReleaseManager, ReleaseTarget } from "./types.js";
 import { getApplicablePolicies } from "../db/get-applicable-policies.js";
 import { VersionRuleEngine } from "../manager/version-rule-engine.js";
-import { ConstantMap, isFilterRule, isPreValidationRule } from "../types.js";
 import { mergePolicies } from "../utils/merge-policies.js";
 import { getRules } from "./version-manager-rules.js";
 
@@ -170,43 +164,14 @@ export class VersionReleaseManager implements ReleaseManager {
   }
 
   async evaluate(options?: VersionEvaluateOptions) {
-    const ctx: RuleEngineContext | undefined =
-      await this.db.query.releaseTarget.findFirst({
-        where: eq(schema.releaseTarget.id, this.releaseTarget.id),
-        with: {
-          resource: true,
-          environment: true,
-          deployment: true,
-        },
-      });
-
-    if (ctx == null)
-      throw new Error(`Release target ${this.releaseTarget.id} not found`);
-
     const policy = options?.policy ?? (await this.getPolicy());
     const rules = (options?.rules ?? getRules)(policy);
 
-    const filterRules = rules.filter(isFilterRule);
-    const preValidationRules = rules.filter(isPreValidationRule);
-
-    for (const rule of preValidationRules) {
-      const result = rule.passing(ctx);
-
-      if (!result.passing) {
-        return {
-          chosenCandidate: null,
-          rejectionReasons: new ConstantMap<string, string>(
-            result.rejectionReason ?? "",
-          ),
-        };
-      }
-    }
-
-    const engine = new VersionRuleEngine(filterRules);
+    const engine = new VersionRuleEngine(rules);
     const versions =
       options?.versions ?? (await this.findVersionsForEvaluate());
 
-    const result = await engine.evaluate(ctx, versions);
+    const result = await engine.evaluate(versions);
     return result;
   }
 }

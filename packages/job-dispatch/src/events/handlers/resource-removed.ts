@@ -3,16 +3,19 @@ import type { ResourceRemoved } from "@ctrlplane/validators/events";
 import { and, eq } from "@ctrlplane/db";
 import { db } from "@ctrlplane/db/client";
 import * as SCHEMA from "@ctrlplane/db/schema";
+import { HookAction } from "@ctrlplane/validators/events";
 
 import { dispatchRunbook } from "../../job-dispatch.js";
 
 export const handleResourceRemoved = async (event: ResourceRemoved) => {
   const { resource, deployment } = event.payload;
+  const { workspaceId } = resource;
+  await db.insert(SCHEMA.event).values({ ...event, workspaceId });
 
   const isSubscribedToResourceRemoved = and(
     eq(SCHEMA.hook.scopeId, deployment.id),
     eq(SCHEMA.hook.scopeType, "deployment"),
-    eq(SCHEMA.hook.action, "deployment.resource.removed"),
+    eq(SCHEMA.hook.action, HookAction.DeploymentResourceRemoved),
   );
   const runhooks = await db
     .select()
@@ -21,7 +24,6 @@ export const handleResourceRemoved = async (event: ResourceRemoved) => {
     .where(isSubscribedToResourceRemoved);
 
   if (runhooks.length === 0) return;
-  await db.insert(SCHEMA.event).values(event);
 
   const resourceId = resource.id;
   const deploymentId = deployment.id;

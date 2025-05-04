@@ -4,8 +4,11 @@ import { and, eq, inArray, isNull, or, sql } from "@ctrlplane/db";
 import { db } from "@ctrlplane/db/client";
 import * as schema from "@ctrlplane/db/schema";
 import { Channel, createWorker, getQueue } from "@ctrlplane/events";
+import { logger } from "@ctrlplane/logger";
 
 import { dispatchEvaluateJobs } from "../utils/dispatch-evaluate-jobs.js";
+
+const log = logger.child({ worker: "compute-systems-release-targets" });
 
 const findMatchingEnvironmentDeploymentPairs = (
   tx: Tx,
@@ -80,7 +83,7 @@ export const computeSystemsReleaseTargetsWorker = createWorker(
     if (deploymentIds.length === 0 || environmentIds.length === 0) return;
 
     try {
-      const releaseTargets = await db.transaction(async (tx) => {
+      const { created, deleted } = await db.transaction(async (tx) => {
         await tx.execute(
           sql`
             SELECT ${schema.releaseTarget.id} FROM ${schema.releaseTarget}
@@ -154,15 +157,16 @@ export const computeSystemsReleaseTargetsWorker = createWorker(
             .values(created)
             .onConflictDoNothing();
 
-        return tx.query.releaseTarget.findMany({
-          where: or(
-            inArray(schema.releaseTarget.deploymentId, deploymentIds),
-            inArray(schema.releaseTarget.environmentId, environmentIds),
-          ),
-        });
+        return { created, deleted };
       });
 
-      if (releaseTargets.length === 0) return;
+      if (deleted.length > 0)
+        for (const rt of deleted)
+          getQueue(Channel.DeletedReleaseTarget).add(rt.id, rt, {
+            deduplication: { id: rt.id },
+          });
+
+      if (created.length === 0) return;
 
       const policyTargets = await db
         .select()
@@ -183,10 +187,14 @@ export const computeSystemsReleaseTargetsWorker = createWorker(
         return;
       }
 
-      await dispatchEvaluateJobs(releaseTargets);
+      await dispatchEvaluateJobs(created);
     } catch (e: any) {
       const isRowLocked = e.code === "55P03";
       if (isRowLocked) {
+        log.info(
+          "Row locked in compute-systems-release-targets, requeueing...",
+          { job },
+        );
         await getQueue(Channel.ComputeSystemsReleaseTargets).add(
           job.name,
           job.data,
