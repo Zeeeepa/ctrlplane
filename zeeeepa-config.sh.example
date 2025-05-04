@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Zeeeepa Stack Configuration
+# Copy this file to zeeeepa-config.sh and customize as needed
+
+# Base directory for all projects
+export ZEEEEPA_BASE_DIR="$HOME/zeeeepa-stack"
+
+# Repository URLs
+export CTRLPLANE_REPO="https://github.com/ctrlplanedev/ctrlplane.git"
+export CTRLC_CLI_REPO="https://github.com/Zeeeepa/ctrlc-cli"
+export WEAVE_REPO="https://github.com/Zeeeepa/weave"
+export PROBOT_REPO="https://github.com/Zeeeepa/probot"
+export PKG_PR_NEW_REPO="https://github.com/Zeeeepa/pkg.pr.new"
+export TLDR_REPO="https://github.com/Zeeeepa/tldr"
+export CO_REVIEWER_REPO="https://github.com/Zeeeepa/co-reviewer"
+
+# Deployment options
+export AUTO_START_SERVICES="true"
+export INSTALL_DEPENDENCIES="true"
+export VERBOSE_LOGGING="false"
+export NON_INTERACTIVE="false"
+
+# Version requirements
+export NODE_MIN_VERSION="22.10.0"
+export PNPM_MIN_VERSION="10.2.0"
+export GO_MIN_VERSION="1.20.0"
+export PYTHON_MIN_VERSION="3.8.0"
+
+# Resource requirements
+export REQUIRED_SPACE="5" # Required space in GB
+
+# Docker options
+# export DOCKER_COMPOSE_FILE="docker-compose.dev.yaml"
+# export DOCKER_NETWORK_NAME="zeeeepa-network"
+
+# Database options
+# export DB_HOST="localhost"
+# export DB_PORT="5432"
+# export DB_USER="postgres"
+# export DB_PASSWORD="postgres"
+# export DB_NAME="ctrlplane"
+
+# Service ports
+# export CTRLPLANE_PORT="3000"
+# export CO_REVIEWER_PORT="3001"
+
+# WSL2 options
+# export WSL_AUTOSTART="true"
+
