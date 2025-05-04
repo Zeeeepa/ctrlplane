@@ -1,0 +1,149 @@
+version: '3.8'
+
+networks:
+  zeeeepa-network:
+    driver: bridge
+
+services:
+  # Database service
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ctrlplane
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis service for caching
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ctrlplane services
+  ctrlplane-api:
+    build:
+      context: ./ctrlplane
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ctrlplane
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+  ctrlplane-worker:
+    build:
+      context: ./ctrlplane
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ctrlplane
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+  # co-reviewer service
+  co-reviewer:
+    build:
+      context: ./co-reviewer
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+  # probot service
+  probot:
+    build:
+      context: ./probot
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+  # pkg.pr.new service
+  pkg-pr-new:
+    build:
+      context: ./pkg.pr.new
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+  # tldr service
+  tldr:
+    build:
+      context: ./tldr
+      dockerfile: Dockerfile
+    ports:
+      - "3004:3000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+  # weave service
+  weave:
+    build:
+      context: ./weave
+      dockerfile: Dockerfile
+    ports:
+      - "3005:3000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - zeeeepa-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+
