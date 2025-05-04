@@ -211,7 +211,6 @@ wait_for_service() {
     
     return 1
 }
-
 # Function to deploy a repository
 deploy_repo() {
     local repo_name="$1"
@@ -240,7 +239,7 @@ deploy_repo() {
             echo -e "${RED}Error: Failed to fetch updates for $repo_name.${NC}"
             FAILED_COMPONENTS+=("$repo_name")
             return 1
-        }
+        fi
         
         # Pull latest changes
         if ! git pull origin; then
@@ -271,7 +270,7 @@ add_wsl_startup() {
     local startup_script="$ZEEEEPA_BASE_DIR/stack.sh"
     
     # Create stack.sh script
-    cat > "$startup_script" << 'EOF'
+    cat > "$startup_script" << 'EOFINNER'
 #!/bin/bash
 
 # Zeeeepa Stack Startup Script
@@ -340,142 +339,265 @@ stop_all_services() {
 main() {
     # Check if running in interactive mode
     if [ "$1" = "--non-interactive" ]; then
+        # Non-interactive mode, start all services
         start_all_services
         return
     fi
     
-    # Check if running with specific command
-    if [ "$1" = "--start" ]; then
-        start_all_services
-        return
-    fi
+    # Interactive mode, ask user what to do
+    echo -e "${GREEN}=======================================================${NC}"
+    echo -e "${GREEN}       Zeeeepa Stack Management Script                 ${NC}"
+    echo -e "${GREEN}=======================================================${NC}"
     
-    if [ "$1" = "--stop" ]; then
-        stop_all_services
-        return
-    fi
-    
-    # Interactive prompt
-    read -p "Do You Want To Run CtrlPlane Stack? Y/N " -n 1 -r
+    # Ask user if they want to start the stack
+    read -p "Do You Want To Run CtrlPlane Stack? (Y/N): " -n 1 -r
     echo
+    
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         start_all_services
+    else
+        echo -e "${YELLOW}Stack startup cancelled.${NC}"
     fi
 }
 
 # Run main function with all arguments
 main "$@"
-EOF
-
+EOFINNER
+    
+    # Make the script executable
     chmod +x "$startup_script"
     
-    # Add to WSL startup if on Windows
-    if grep -q Microsoft /proc/version; then
-        print_header "Setting up WSL2 startup"
+    # Add to WSL2 startup if running in WSL
+    if grep -q Microsoft /proc/version || grep -q microsoft /proc/version; then
+        # Running in WSL
+        echo "Detected WSL environment. Adding startup entry..."
         
         # Create .bashrc entry if it doesn't exist
         if ! grep -q "zeeeepa-stack/stack.sh" "$HOME/.bashrc"; then
             echo -e "\n# Zeeeepa Stack Startup" >> "$HOME/.bashrc"
-            echo "$startup_script" >> "$HOME/.bashrc"
-            echo -e "${GREEN}Added Zeeeepa Stack startup to .bashrc${NC}"
-        else
-            echo -e "${YELLOW}Zeeeepa Stack startup already in .bashrc${NC}"
+            echo "$ZEEEEPA_BASE_DIR/stack.sh" >> "$HOME/.bashrc"
+            echo "Added startup entry to .bashrc"
         fi
     else
-        echo -e "${YELLOW}Not running in WSL2, skipping startup configuration${NC}"
-    fi
-}
-
-# Function to display deployment summary
-deployment_summary() {
-    print_header "Deployment Summary"
-    
-    echo -e "${GREEN}Successfully deployed components:${NC}"
-    for component in "${DEPLOYED_COMPONENTS[@]}"; do
-        echo -e "  - $component"
-    done
-    
-    if [ ${#FAILED_COMPONENTS[@]} -gt 0 ]; then
-        echo -e "\n${RED}Failed to deploy components:${NC}"
-        for component in "${FAILED_COMPONENTS[@]}"; do
-            echo -e "  - $component"
-        done
-        echo -e "\nCheck the deployment log at $DEPLOYMENT_LOG for details."
+        echo "Not running in WSL. Skipping automatic startup configuration."
     fi
     
-    echo -e "\n${BLUE}To start the stack:${NC}"
-    echo -e "  $ZEEEEPA_BASE_DIR/stack.sh"
-    
-    echo -e "\n${BLUE}To stop the stack:${NC}"
-    echo -e "  $ZEEEEPA_BASE_DIR/stack.sh --stop"
-    
-    echo -e "\n${BLUE}To deploy again in the future, you can run:${NC}"
-    echo -e "  curl -sSL https://raw.githubusercontent.com/Zeeeepa/ctrlplane/main/deploy-zeeeepa.sh | bash"
+    echo -e "${GREEN}Created stack management script at $startup_script${NC}"
+    echo -e "${YELLOW}You can start the stack manually by running:${NC}"
+    echo -e "  $startup_script"
 }
 
-# Function to install Node.js if missing or version is too low
+# Function to install/update Node.js
 install_node() {
-    if ! command_exists node || version_lt "$(node -v | cut -d 'v' -f 2)" "$NODE_MIN_VERSION"; then
-        echo -e "${YELLOW}Installing/updating Node.js to version $NODE_MIN_VERSION or higher...${NC}"
-        
-        # Install nvm if not already installed
-        if ! command_exists nvm; then
-            echo "Installing nvm..."
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+    if command_exists node; then
+        local node_version=$(node -v | cut -d 'v' -f 2)
+        if ! check_version "Node.js" "$node_version" "$NODE_MIN_VERSION"; then
+            echo -e "${YELLOW}Attempting to update Node.js...${NC}"
             
-            # Source nvm
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            # Install/update using nvm if available
+            if command_exists nvm; then
+                nvm install --lts
+                nvm use --lts
+            else
+                # Install nvm and then Node.js
+                echo -e "${BLUE}Installing nvm to manage Node.js versions...${NC}"
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                
+                # Source nvm
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                
+                # Install and use latest LTS version
+                nvm install --lts
+                nvm use --lts
+            fi
+            
+            # Verify installation
+            if ! command_exists node; then
+                echo -e "${RED}Failed to install Node.js.${NC}"
+                return 1
+            fi
+            
+            node_version=$(node -v | cut -d 'v' -f 2)
+            if ! check_version "Node.js" "$node_version" "$NODE_MIN_VERSION"; then
+                echo -e "${RED}Failed to install a compatible version of Node.js.${NC}"
+                return 1
+            fi
         fi
+    else
+        echo -e "${YELLOW}Node.js not found. Installing...${NC}"
         
-        # Install Node.js
+        # Install nvm and then Node.js
+        echo -e "${BLUE}Installing nvm to manage Node.js versions...${NC}"
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+        
+        # Source nvm
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        # Install and use latest LTS version
         nvm install --lts
         nvm use --lts
         
         # Verify installation
-        if ! command_exists node || version_lt "$(node -v | cut -d 'v' -f 2)" "$NODE_MIN_VERSION"; then
-            echo -e "${RED}Failed to install Node.js $NODE_MIN_VERSION or higher.${NC}"
+        if ! command_exists node; then
+            echo -e "${RED}Failed to install Node.js.${NC}"
             return 1
         fi
         
-        echo -e "${GREEN}Successfully installed Node.js $(node -v).${NC}"
+        node_version=$(node -v | cut -d 'v' -f 2)
+        if ! check_version "Node.js" "$node_version" "$NODE_MIN_VERSION"; then
+            echo -e "${RED}Failed to install a compatible version of Node.js.${NC}"
+            return 1
+        fi
     fi
+    
+    echo -e "${GREEN}Node.js $(node -v) is installed and ready.${NC}"
     return 0
 }
 
-# Function to install pnpm if missing or version is too low
+# Function to install/update pnpm
 install_pnpm() {
-    if ! command_exists pnpm || version_lt "$(pnpm --version)" "$PNPM_MIN_VERSION"; then
-        echo -e "${YELLOW}Installing/updating pnpm to version $PNPM_MIN_VERSION or higher...${NC}"
+    if command_exists pnpm; then
+        local pnpm_version=$(pnpm --version)
+        if ! check_version "pnpm" "$pnpm_version" "$PNPM_MIN_VERSION"; then
+            echo -e "${YELLOW}Attempting to update pnpm...${NC}"
+            
+            # Update pnpm
+            npm install -g pnpm@latest
+            
+            # Verify installation
+            if ! command_exists pnpm; then
+                echo -e "${RED}Failed to install pnpm.${NC}"
+                return 1
+            fi
+            
+            pnpm_version=$(pnpm --version)
+            if ! check_version "pnpm" "$pnpm_version" "$PNPM_MIN_VERSION"; then
+                echo -e "${RED}Failed to install a compatible version of pnpm.${NC}"
+                return 1
+            fi
+        fi
+    else
+        echo -e "${YELLOW}pnpm not found. Installing...${NC}"
         
         # Install pnpm
-        npm install -g pnpm@10
+        npm install -g pnpm@latest
         
         # Verify installation
-        if ! command_exists pnpm || version_lt "$(pnpm --version)" "$PNPM_MIN_VERSION"; then
-            echo -e "${RED}Failed to install pnpm $PNPM_MIN_VERSION or higher.${NC}"
+        if ! command_exists pnpm; then
+            echo -e "${RED}Failed to install pnpm.${NC}"
             return 1
         fi
         
-        echo -e "${GREEN}Successfully installed pnpm $(pnpm --version).${NC}"
+        pnpm_version=$(pnpm --version)
+        if ! check_version "pnpm" "$pnpm_version" "$PNPM_MIN_VERSION"; then
+            echo -e "${RED}Failed to install a compatible version of pnpm.${NC}"
+            return 1
+        fi
     fi
+    
+    echo -e "${GREEN}pnpm $(pnpm --version) is installed and ready.${NC}"
     return 0
 }
 
-# Function to install Go if missing or version is too low
+# Function to install/check Go
 install_go() {
-    if ! command_exists go || version_lt "$(go version | awk '{print $3}' | sed 's/go//')" "$GO_MIN_VERSION"; then
-        echo -e "${YELLOW}Go $GO_MIN_VERSION or higher is required but not installed or too old.${NC}"
-        echo -e "${YELLOW}Please install Go manually from https://golang.org/dl/${NC}"
-        return 1
+    if command_exists go; then
+        local go_version=$(go version | awk '{print $3}' | cut -c 3-)
+        if ! check_version "Go" "$go_version" "$GO_MIN_VERSION"; then
+            echo -e "${YELLOW}Warning: Go version $go_version is less than the required version $GO_MIN_VERSION.${NC}"
+            echo -e "${YELLOW}Please update Go manually from https://golang.org/dl/${NC}"
+            if ! confirm_continue "Continue anyway?"; then
+                return 1
+            fi
+        fi
+    else
+        echo -e "${YELLOW}Go not found. Installing...${NC}"
+        
+        # Detect OS
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            # Install Go on Linux
+            local go_download_url="https://golang.org/dl/go1.21.0.linux-amd64.tar.gz"
+            
+            # Download and extract
+            curl -L -o /tmp/go.tar.gz "$go_download_url"
+            sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+            rm /tmp/go.tar.gz
+            
+            # Add to PATH if not already there
+            if ! grep -q "/usr/local/go/bin" "$HOME/.bashrc"; then
+                echo 'export PATH=$PATH:/usr/local/go/bin' >> "$HOME/.bashrc"
+                export PATH=$PATH:/usr/local/go/bin
+            fi
+            
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # Install Go on macOS using Homebrew
+            if command_exists brew; then
+                brew install go
+            else
+                echo -e "${RED}Homebrew not found. Please install Go manually from https://golang.org/dl/${NC}"
+                if ! confirm_continue "Continue anyway?"; then
+                    return 1
+                fi
+            fi
+        else
+            echo -e "${RED}Unsupported OS. Please install Go manually from https://golang.org/dl/${NC}"
+            if ! confirm_continue "Continue anyway?"; then
+                return 1
+            fi
+        fi
+        
+        # Verify installation
+        if ! command_exists go; then
+            echo -e "${RED}Failed to install Go.${NC}"
+            if ! confirm_continue "Continue anyway?"; then
+                return 1
+            fi
+        else
+            local go_version=$(go version | awk '{print $3}' | cut -c 3-)
+            if ! check_version "Go" "$go_version" "$GO_MIN_VERSION"; then
+                echo -e "${RED}Failed to install a compatible version of Go.${NC}"
+                if ! confirm_continue "Continue anyway?"; then
+                    return 1
+                fi
+            fi
+        fi
+    fi
+    
+    if command_exists go; then
+        echo -e "${GREEN}Go $(go version | awk '{print $3}') is installed and ready.${NC}"
     fi
     return 0
 }
 
-# Function to install Python if missing or version is too low
+# Function to install/update Python
 install_python() {
-    if ! command_exists python3 || version_lt "$(python3 --version | awk '{print $2}')" "$PYTHON_MIN_VERSION"; then
-        echo -e "${YELLOW}Installing/updating Python to version $PYTHON_MIN_VERSION or higher...${NC}"
+    local python_cmd=""
+    
+    # Determine which Python command to use
+    if command_exists python3; then
+        python_cmd="python3"
+    elif command_exists python; then
+        if [[ $(python --version 2>&1) == *"Python 3"* ]]; then
+            python_cmd="python"
+        else
+            echo -e "${YELLOW}Python 2 detected. Python 3 is required.${NC}"
+            python_cmd=""
+        fi
+    fi
+    
+    if [ -n "$python_cmd" ]; then
+        local python_version=$($python_cmd --version 2>&1 | awk '{print $2}')
+        if ! check_version "Python" "$python_version" "$PYTHON_MIN_VERSION"; then
+            echo -e "${YELLOW}Warning: Python version $python_version is less than the required version $PYTHON_MIN_VERSION.${NC}"
+            echo -e "${YELLOW}Please update Python manually.${NC}"
+            if ! confirm_continue "Continue anyway?"; then
+                return 1
+            fi
+        fi
+    else
+        echo -e "${YELLOW}Python 3 not found. Installing...${NC}"
         
         # Detect OS
         if [[ "$OSTYPE" == "linux-gnu"* ]]; then
@@ -486,36 +608,62 @@ install_python() {
             elif command_exists dnf; then
                 sudo dnf install -y python3 python3-pip
             else
-                echo -e "${RED}Could not determine package manager. Please install Python $PYTHON_MIN_VERSION manually.${NC}"
-                return 1
+                echo -e "${RED}Could not determine package manager. Please install Python 3 manually.${NC}"
+                if ! confirm_continue "Continue anyway?"; then
+                    return 1
+                fi
             fi
         elif [[ "$OSTYPE" == "darwin"* ]]; then
             if command_exists brew; then
-                brew install python3
+                brew install python
             else
-                echo -e "${RED}Homebrew not found. Please install Python $PYTHON_MIN_VERSION manually.${NC}"
-                return 1
+                echo -e "${RED}Homebrew not found. Please install Python 3 manually.${NC}"
+                if ! confirm_continue "Continue anyway?"; then
+                    return 1
+                fi
             fi
         else
-            echo -e "${RED}Unsupported OS. Please install Python $PYTHON_MIN_VERSION manually.${NC}"
-            return 1
+            echo -e "${RED}Unsupported OS. Please install Python 3 manually.${NC}"
+            if ! confirm_continue "Continue anyway?"; then
+                return 1
+            fi
         fi
         
         # Verify installation
-        if ! command_exists python3 || version_lt "$(python3 --version | awk '{print $2}')" "$PYTHON_MIN_VERSION"; then
-            echo -e "${RED}Failed to install Python $PYTHON_MIN_VERSION or higher.${NC}"
-            return 1
+        if command_exists python3; then
+            python_cmd="python3"
+        elif command_exists python; then
+            if [[ $(python --version 2>&1) == *"Python 3"* ]]; then
+                python_cmd="python"
+            fi
         fi
         
-        echo -e "${GREEN}Successfully installed Python $(python3 --version | awk '{print $2}').${NC}"
+        if [ -z "$python_cmd" ]; then
+            echo -e "${RED}Failed to install Python 3.${NC}"
+            if ! confirm_continue "Continue anyway?"; then
+                return 1
+            fi
+        else
+            local python_version=$($python_cmd --version 2>&1 | awk '{print $2}')
+            if ! check_version "Python" "$python_version" "$PYTHON_MIN_VERSION"; then
+                echo -e "${RED}Failed to install a compatible version of Python.${NC}"
+                if ! confirm_continue "Continue anyway?"; then
+                    return 1
+                fi
+            fi
+        fi
+    fi
+    
+    if [ -n "$python_cmd" ]; then
+        echo -e "${GREEN}Python $($python_cmd --version 2>&1 | awk '{print $2}') is installed and ready.${NC}"
     fi
     return 0
 }
 
-# Function to install Docker if missing
+# Function to install Docker
 install_docker() {
     if ! command_exists docker; then
-        echo -e "${YELLOW}Installing Docker...${NC}"
+        echo -e "${YELLOW}Docker not found. Installing...${NC}"
         
         # Detect OS
         if [[ "$OSTYPE" == "linux-gnu"* ]]; then
@@ -553,6 +701,31 @@ install_docker() {
         echo -e "${GREEN}Successfully installed Docker.${NC}"
     fi
     return 0
+}
+
+# Function to display deployment summary
+deployment_summary() {
+    print_header "Deployment Summary"
+    
+    echo -e "${GREEN}Successfully deployed components:${NC}"
+    for component in "${DEPLOYED_COMPONENTS[@]}"; do
+        echo -e "  - ${GREEN}$component${NC}"
+    done
+    
+    if [ ${#FAILED_COMPONENTS[@]} -gt 0 ]; then
+        echo -e "\n${RED}Failed components:${NC}"
+        for component in "${FAILED_COMPONENTS[@]}"; do
+            echo -e "  - ${RED}$component${NC}"
+        done
+        echo -e "\n${YELLOW}Please check the log file for more details: $DEPLOYMENT_LOG${NC}"
+    fi
+    
+    echo -e "\n${BLUE}Zeeeepa Stack has been deployed to: $ZEEEEPA_BASE_DIR${NC}"
+    echo -e "${BLUE}You can start the stack by running: $ZEEEEPA_BASE_DIR/stack.sh${NC}"
+    
+    if grep -q Microsoft /proc/version || grep -q microsoft /proc/version; then
+        echo -e "${BLUE}The stack will also start automatically when you start your WSL instance.${NC}"
+    fi
 }
 
 # Main function
@@ -794,4 +967,3 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # Run main function
     main
 fi
-
