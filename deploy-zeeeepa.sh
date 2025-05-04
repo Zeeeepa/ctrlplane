@@ -9,6 +9,9 @@
 # - pkg.pr.new
 # - tldr
 # - co-reviewer
+#
+# This script can be run directly from GitHub with:
+# curl -sSL https://raw.githubusercontent.com/Zeeeepa/ctrlplane/main/deploy-zeeeepa.sh | bash
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -59,8 +62,52 @@ log() {
 }
 
 # Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to check if a command exists and install it if missing
 check_command() {
-    echo -e "${RED}Error: $1 is required but not installed. Please install it using your system's package manager (e.g., apt, yum, brew).${NC}"
+    if ! command_exists "$1"; then
+        echo -e "${YELLOW}Warning: $1 is required but not installed.${NC}"
+        
+        # Detect OS
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            if command_exists apt-get; then
+                echo -e "${BLUE}Attempting to install $1 using apt-get...${NC}"
+                sudo apt-get update && sudo apt-get install -y "$1"
+            elif command_exists yum; then
+                echo -e "${BLUE}Attempting to install $1 using yum...${NC}"
+                sudo yum install -y "$1"
+            elif command_exists dnf; then
+                echo -e "${BLUE}Attempting to install $1 using dnf...${NC}"
+                sudo dnf install -y "$1"
+            else
+                echo -e "${RED}Error: Could not determine package manager. Please install $1 manually.${NC}"
+                return 1
+            fi
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            if command_exists brew; then
+                echo -e "${BLUE}Attempting to install $1 using brew...${NC}"
+                brew install "$1"
+            else
+                echo -e "${RED}Error: Homebrew not found. Please install $1 manually.${NC}"
+                return 1
+            fi
+        else
+            echo -e "${RED}Error: Unsupported OS. Please install $1 manually.${NC}"
+            return 1
+        fi
+        
+        # Check if installation was successful
+        if ! command_exists "$1"; then
+            echo -e "${RED}Error: Failed to install $1. Please install it manually.${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}Successfully installed $1.${NC}"
+    fi
+    return 0
 }
 
 # Function to check if user wants to continue after a warning
@@ -84,14 +131,11 @@ check_version() {
     local current_version="$2"
     local required_version="$3"
     
-    read -p "$1 (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[YyNn]$ ]]; then
-        echo "Invalid input. Please answer 'y' or 'n'."
-        confirm_continue "$1"
-        return 1
-    fi
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if version_lt "$current_version" "$required_version"; then
+        echo -e "${YELLOW}Warning: $command_name version $current_version is less than the required version $required_version.${NC}"
+        if ! confirm_continue "Continue anyway?"; then
+            return 1
+        fi
     else
         log "$command_name version $current_version meets requirements (>= $required_version)"
     fi
@@ -117,15 +161,15 @@ check_disk_space() {
 # Function to check if a port is in use
 check_port() {
     local port="$1"
-    if command -v netstat &> /dev/null; then
+    if command_exists netstat; then
         if netstat -tuln | grep -q ":$port "; then
             return 0
         fi
-    elif command -v ss &> /dev/null; then
+    elif command_exists ss; then
         if ss -tuln | grep -q ":$port "; then
             return 0
         fi
-    elif command -v lsof &> /dev/null; then
+    elif command_exists lsof; then
         if lsof -i ":$port" &> /dev/null; then
             return 0
         fi
@@ -142,19 +186,30 @@ wait_for_service() {
     
     echo -e "Waiting for $service_name to be ready..."
     local attempts=0
+    
+    while (( attempts < max_attempts )); do
+        attempts=$((attempts + 1))
+        
+        if check_port "$port"; then
+            echo -e "\n${GREEN}$service_name is ready!${NC}"
+            return 0
+        fi
+        
+        if (( attempts == max_attempts )); then
             echo -e "${RED}Error: $service_name did not start within the expected time.${NC}"
-            # Add the following lines to capture and display the error message
+            # Capture and display the error message
             if docker logs $service_name &> /tmp/docker_log.txt; then
               echo "Last lines of docker log:"
               tail /tmp/docker_log.txt
             fi
             return 1
         fi
+        
         echo -n "."
         sleep "$wait_seconds"
     done
-    echo -e "\n${GREEN}$service_name is ready!${NC}"
-    return 0
+    
+    return 1
 }
 
 # Function to deploy a repository
@@ -185,7 +240,7 @@ deploy_repo() {
             echo -e "${RED}Error: Failed to fetch updates for $repo_name.${NC}"
             FAILED_COMPONENTS+=("$repo_name")
             return 1
-        fi
+        }
         
         # Pull latest changes
         if ! git pull origin; then
@@ -353,66 +408,204 @@ deployment_summary() {
     
     echo -e "\n${BLUE}To stop the stack:${NC}"
     echo -e "  $ZEEEEPA_BASE_DIR/stack.sh --stop"
+    
+    echo -e "\n${BLUE}To deploy again in the future, you can run:${NC}"
+    echo -e "  curl -sSL https://raw.githubusercontent.com/Zeeeepa/ctrlplane/main/deploy-zeeeepa.sh | bash"
+}
+
+# Function to install Node.js if missing or version is too low
+install_node() {
+    if ! command_exists node || version_lt "$(node -v | cut -d 'v' -f 2)" "$NODE_MIN_VERSION"; then
+        echo -e "${YELLOW}Installing/updating Node.js to version $NODE_MIN_VERSION or higher...${NC}"
+        
+        # Install nvm if not already installed
+        if ! command_exists nvm; then
+            echo "Installing nvm..."
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+            
+            # Source nvm
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        fi
+        
+        # Install Node.js
+        nvm install --lts
+        nvm use --lts
+        
+        # Verify installation
+        if ! command_exists node || version_lt "$(node -v | cut -d 'v' -f 2)" "$NODE_MIN_VERSION"; then
+            echo -e "${RED}Failed to install Node.js $NODE_MIN_VERSION or higher.${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}Successfully installed Node.js $(node -v).${NC}"
+    fi
+    return 0
+}
+
+# Function to install pnpm if missing or version is too low
+install_pnpm() {
+    if ! command_exists pnpm || version_lt "$(pnpm --version)" "$PNPM_MIN_VERSION"; then
+        echo -e "${YELLOW}Installing/updating pnpm to version $PNPM_MIN_VERSION or higher...${NC}"
+        
+        # Install pnpm
+        npm install -g pnpm@10
+        
+        # Verify installation
+        if ! command_exists pnpm || version_lt "$(pnpm --version)" "$PNPM_MIN_VERSION"; then
+            echo -e "${RED}Failed to install pnpm $PNPM_MIN_VERSION or higher.${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}Successfully installed pnpm $(pnpm --version).${NC}"
+    fi
+    return 0
+}
+
+# Function to install Go if missing or version is too low
+install_go() {
+    if ! command_exists go || version_lt "$(go version | awk '{print $3}' | sed 's/go//')" "$GO_MIN_VERSION"; then
+        echo -e "${YELLOW}Go $GO_MIN_VERSION or higher is required but not installed or too old.${NC}"
+        echo -e "${YELLOW}Please install Go manually from https://golang.org/dl/${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# Function to install Python if missing or version is too low
+install_python() {
+    if ! command_exists python3 || version_lt "$(python3 --version | awk '{print $2}')" "$PYTHON_MIN_VERSION"; then
+        echo -e "${YELLOW}Installing/updating Python to version $PYTHON_MIN_VERSION or higher...${NC}"
+        
+        # Detect OS
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            if command_exists apt-get; then
+                sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv
+            elif command_exists yum; then
+                sudo yum install -y python3 python3-pip
+            elif command_exists dnf; then
+                sudo dnf install -y python3 python3-pip
+            else
+                echo -e "${RED}Could not determine package manager. Please install Python $PYTHON_MIN_VERSION manually.${NC}"
+                return 1
+            fi
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            if command_exists brew; then
+                brew install python3
+            else
+                echo -e "${RED}Homebrew not found. Please install Python $PYTHON_MIN_VERSION manually.${NC}"
+                return 1
+            fi
+        else
+            echo -e "${RED}Unsupported OS. Please install Python $PYTHON_MIN_VERSION manually.${NC}"
+            return 1
+        fi
+        
+        # Verify installation
+        if ! command_exists python3 || version_lt "$(python3 --version | awk '{print $2}')" "$PYTHON_MIN_VERSION"; then
+            echo -e "${RED}Failed to install Python $PYTHON_MIN_VERSION or higher.${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}Successfully installed Python $(python3 --version | awk '{print $2}').${NC}"
+    fi
+    return 0
+}
+
+# Function to install Docker if missing
+install_docker() {
+    if ! command_exists docker; then
+        echo -e "${YELLOW}Installing Docker...${NC}"
+        
+        # Detect OS
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            sudo usermod -aG docker $USER
+            
+            # Install Docker Compose if not already installed
+            if ! command_exists docker-compose; then
+                sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.3/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                sudo chmod +x /usr/local/bin/docker-compose
+            fi
+            
+            echo -e "${YELLOW}Docker has been installed. You may need to log out and log back in for group changes to take effect.${NC}"
+            echo -e "${YELLOW}Alternatively, run 'newgrp docker' to update group membership without logging out.${NC}"
+            
+            # Try to update group membership without logging out
+            if command_exists newgrp; then
+                newgrp docker
+            fi
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            echo -e "${YELLOW}Please install Docker Desktop for Mac from https://www.docker.com/products/docker-desktop${NC}"
+            return 1
+        else
+            echo -e "${RED}Unsupported OS. Please install Docker manually.${NC}"
+            return 1
+        fi
+        
+        # Verify installation
+        if ! command_exists docker; then
+            echo -e "${RED}Failed to install Docker.${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}Successfully installed Docker.${NC}"
+    fi
+    return 0
 }
 
 # Main function
 main() {
-    print_header "Zeeeepa Stack Deployment"
+    # Display welcome message
+    clear
+    echo -e "${GREEN}=======================================================${NC}"
+    echo -e "${GREEN}       Zeeeepa Stack Deployment Script                 ${NC}"
+    echo -e "${GREEN}=======================================================${NC}"
+    echo -e "This script will deploy the complete Zeeeepa stack including:"
+    echo -e "  - ctrlplane: Deployment orchestration tool"
+    echo -e "  - ctrlc-cli: Command-line interface for ctrlplane"
+    echo -e "  - weave: AI toolkit for developing applications"
+    echo -e "  - probot: Framework for building GitHub Apps"
+    echo -e "  - pkg.pr.new: Continuous preview releases for libraries"
+    echo -e "  - tldr: PR summarizer tool"
+    echo -e "  - co-reviewer: Code review tool"
+    echo -e "${GREEN}=======================================================${NC}"
+    echo -e "Deployment will be to: ${BLUE}$ZEEEEPA_BASE_DIR${NC}"
+    echo -e "Log file: ${BLUE}$DEPLOYMENT_LOG${NC}"
+    echo -e "${GREEN}=======================================================${NC}"
+    echo
     
-    # Check prerequisites
-    print_header "Checking Prerequisites"
-    
-    # Check required commands
-    required_commands=("git" "node" "pnpm" "go" "python3" "pip" "docker")
-    missing_commands=()
-    
-    for cmd in "${required_commands[@]}"; do
-        if ! check_command "$cmd"; then
-            missing_commands+=("$cmd")
-        fi
-    done
-    
-    if [ ${#missing_commands[@]} -gt 0 ]; then
-        echo -e "${RED}Error: The following required commands are missing:${NC}"
-        for cmd in "${missing_commands[@]}"; do
-            echo -e "  - $cmd"
-        done
-        echo -e "\n${YELLOW}Please install these dependencies and try again.${NC}"
-        exit 1
+    # Ask for confirmation before proceeding
+    if ! confirm_continue "Do you want to proceed with the deployment?"; then
+        echo -e "${YELLOW}Deployment cancelled.${NC}"
+        exit 0
     fi
     
-    # Check Node.js version
-    NODE_VERSION=$(node -v | cut -d 'v' -f 2)
-    if ! check_version "Node.js" "$NODE_VERSION" "$NODE_MIN_VERSION"; then
-        exit 1
-    fi
+    # Check and install prerequisites
+    print_header "Checking and Installing Prerequisites"
     
-    # Check pnpm version
-    PNPM_VERSION=$(pnpm --version)
-    # Check pnpm version
-    PNPM_VERSION=$(pnpm --version)
-    if ! check_version "pnpm" "$PNPM_VERSION" "$PNPM_MIN_VERSION"; then
-        exit 1
-    fi
-
-    # Check pnpm major version
-    PNPM_MAJOR_VERSION=$(echo $PNPM_VERSION | cut -d '.' -f 1)
-    if [ "$PNPM_MAJOR_VERSION" -ne "10" ]; then
-        echo -e "${RED}Error: Incompatible pnpm major version. Please use pnpm version 10.x.x${NC}"
-        exit 1
-    fi
+    # Install essential tools
+    check_command git || exit 1
+    check_command curl || exit 1
     
-    # Check Go version
-    GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
-    if ! check_version "Go" "$GO_VERSION" "$GO_MIN_VERSION"; then
-        exit 1
-    fi
+    # Install/update Node.js
+    install_node || exit 1
     
-    # Check Python version
-    PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-    if ! check_version "Python" "$PYTHON_VERSION" "$PYTHON_MIN_VERSION"; then
-        exit 1
-    fi
+    # Install/update pnpm
+    install_pnpm || exit 1
+    
+    # Install/check Go
+    install_go || exit 1
+    
+    # Install/update Python
+    install_python || exit 1
+    
+    # Install pip if not already installed
+    check_command pip || check_command pip3 || exit 1
+    
+    # Install Docker
+    install_docker || exit 1
     
     # Check disk space
     print_header "Checking Disk Space"
@@ -452,13 +645,10 @@ main() {
             else
                 # Start Docker services
                 echo "Starting Docker services..."
-                # Start Docker services
-                echo "Starting Docker services..."
                 if ! docker compose -f docker-compose.dev.yaml up -d; then
                     docker_error=$?
                     echo -e "${RED}Error: Failed to start Docker services for ctrlplane. Docker compose exited with code $docker_error.${NC}"
                     FAILED_COMPONENTS+=("ctrlplane-docker")
-                else
                 else
                     # Run database migrations
                     echo "Running database migrations..."
@@ -599,6 +789,9 @@ main() {
     deployment_summary
 }
 
-# Run main function
-main
+# Check if script is being run directly or sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # Run main function
+    main
+fi
 
