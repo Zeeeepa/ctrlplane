@@ -19,8 +19,29 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Load configuration if available
+CONFIG_FILE="./zeeeepa-config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Loading configuration from $CONFIG_FILE"
+    source "$CONFIG_FILE"
+else
+    echo "No configuration file found, using defaults"
+fi
+
+# Set default values if not defined in config
+: ${ZEEEEPA_BASE_DIR:="$HOME/zeeeepa-stack"}
+: ${CTRLPLANE_REPO:="https://github.com/ctrlplanedev/ctrlplane.git"}
+: ${CTRLC_CLI_REPO:="https://github.com/Zeeeepa/ctrlc-cli"}
+: ${WEAVE_REPO:="https://github.com/Zeeeepa/weave"}
+: ${PROBOT_REPO:="https://github.com/Zeeeepa/probot"}
+: ${PKG_PR_NEW_REPO:="https://github.com/Zeeeepa/pkg.pr.new"}
+: ${TLDR_REPO:="https://github.com/Zeeeepa/tldr"}
+: ${CO_REVIEWER_REPO:="https://github.com/Zeeeepa/co-reviewer"}
+: ${VERBOSE_LOGGING:="false"}
+: ${NON_INTERACTIVE:="false"}
+
 # Base directory for all projects
-BASE_DIR="$HOME/zeeeepa-stack"
+BASE_DIR="$ZEEEEPA_BASE_DIR"
 
 # Function to check if a command exists
 check_command() {
@@ -36,6 +57,23 @@ print_header() {
     echo -e "${BLUE}$1${NC}"
     echo -e "${BLUE}===================================================${NC}\n"
 }
+
+# Function for verbose logging
+log() {
+    if [ "$VERBOSE_LOGGING" = "true" ]; then
+        echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    fi
+}
+
+# Cleanup function for trap
+cleanup() {
+    echo -e "\n${YELLOW}Cleaning up...${NC}"
+    # Add cleanup code here if needed
+    echo -e "${YELLOW}If any services were started, you may need to stop them manually.${NC}"
+}
+
+# Set trap for cleanup on exit due to error
+trap cleanup ERR
 
 # Check prerequisites
 print_header "Checking Prerequisites"
@@ -66,6 +104,26 @@ if [[ $(echo "$PNPM_VERSION 10.2.0" | awk '{print ($1 < $2)}') -eq 1 ]]; then
     read -p "Continue anyway? (y/n) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+# Check disk space
+print_header "Checking Disk Space"
+REQUIRED_SPACE=5  # Required space in GB
+AVAILABLE_SPACE=$(df -BG "$HOME" | awk 'NR==2 {gsub("G", "", $4); print $4}')
+
+log "Available space: ${AVAILABLE_SPACE}GB, Required: ${REQUIRED_SPACE}GB"
+
+if (( AVAILABLE_SPACE < REQUIRED_SPACE )); then
+    echo -e "${RED}Error: Not enough disk space. At least ${REQUIRED_SPACE}GB is required, but only ${AVAILABLE_SPACE}GB is available.${NC}"
+    if [ "$NON_INTERACTIVE" != "true" ]; then
+        read -p "Continue anyway? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    else
         exit 1
     fi
 fi
@@ -286,4 +344,3 @@ echo -e "  - ${BLUE}co-reviewer${NC}: Code review tool"
 echo -e "\nTo start all services, run:"
 echo -e "  ${YELLOW}$BASE_DIR/stack.sh${NC}"
 echo -e "\nFor more information, see the DEPLOYMENT.md and OVERVIEW.md files."
-
