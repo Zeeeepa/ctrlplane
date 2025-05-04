@@ -41,9 +41,13 @@ backup_data() {
     # Backup Docker volumes
     if command -v docker &> /dev/null; then
         echo "Backing up Docker volumes..."
-        if docker volume ls | grep -q "ctrlplane_db-data"; then
-            mkdir -p "$backup_dir/volumes"
-            docker run --rm -v ctrlplane_db-data:/source -v "$backup_dir/volumes":/backup alpine tar -czf /backup/db-data.tar.gz -C /source .
+        # Backup Docker volumes
+        if command -v docker &> /dev/null; then
+            echo "Backing up Docker volumes..."
+            for volume in $(docker volume ls -q); do
+                mkdir -p "$backup_dir/volumes"
+                docker run --rm -v "$volume:/source" -v "$backup_dir/volumes":/backup alpine tar -czf "/backup/${volume}.tar.gz" -C /source .
+            done
         fi
     fi
     
