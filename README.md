@@ -1,131 +1,208 @@
-<p align="center">
-  <a href="https://ctrlplane.dev">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://ctrlplane.dev/logo-white.png">
-      <source media="(prefers-color-scheme: light)" srcset="https://ctrlplane.dev/logo-black.png">
-      <img src="https://ctrlplane.dev/logo-black.png" height="60">
-    </picture>
-  </a>
-</p>
+# Zeeeepa Stack Deployment Scripts
 
-<p align="center">
-  <a aria-label="Join the community on GitHub" href="https://github.com/ctrlplanedev/ctrlplane/discussions"><img alt="" src="https://img.shields.io/badge/Join_the_community-blueviolet?style=for-the-badge"></a>
-  <a aria-label="Commit activity" href="https://github.com/ctrlplanedev/ctrlplane/activity"><img alt="" src="https://img.shields.io/github/commit-activity/m/ctrlplanedev/ctrlplane/main?style=for-the-badge"></a>
-</p>
+This repository contains scripts and configurations to seamlessly deploy the Zeeeepa stack, which includes:
 
-<p align="center">
-  <a href="https://ctrlplane.dev"><b>Website</b></a> •
-  <a href="https://github.com/ctrlplanedev/ctrlplane/releases"><b>Releases</b></a> •
-  <a href="https://docs.ctrlplane.dev"><b>Documentation</b></a>
-</p>
+- **ctrlplane**: A deployment orchestration tool
+- **ctrlc-cli**: CLI for ctrlplane
+- **weave**: AI toolkit for developing applications by Weights & Biases
+- **probot**: Framework for building GitHub Apps
+- **pkg.pr.new**: Continuous preview releases for libraries
+- **tldr**: PR summarizer tool
+- **co-reviewer**: Code review assistant
 
-Meet [Ctrlplane](https://ctrlplane.dev), an open-source **deployment
-orchestration** tool.
+## Prerequisites
 
-## :rocket: Features
+The deployment scripts will check for and help install most dependencies, but it's recommended to have the following installed:
 
-- **Unified Control:** Centralize management of multi-stage deployment pipelines
-  across diverse environments.
-- **Flexible Resource Support:** Deploy to Kubernetes, cloud functions, VMs, or
-  custom infrastructure from a single platform.
-- **Advanced Workflow Orchestration:** Automate sophisticated deployment
-  processes including testing, code analysis, security scans, and approval
-  gates.
-- **CI/CD Integration:** Seamlessly connects with Jenkins, GitLab CI, GitHub
-  Actions, and other popular CI tools to trigger deployments.
-- **Environment Management:** Efficiently handle transitions between dev, test,
-  staging, and production environments.
+- Git
+- Docker and Docker Compose
+- Node.js (v22+) and pnpm
+- Python 3.9+ and pip
+- Go (for ctrlc-cli)
 
-## 💪 Trusted by
+## Deployment Options
 
-<p align="center">
-  <a href="https://wandb.ai">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/ctrlplanedev/ctrlplane/blob/main/assets/trusted-by/wb-white.png?raw=true">
-      <source media="(prefers-color-scheme: light)" srcset="https://github.com/ctrlplanedev/ctrlplane/blob/main/assets/trusted-by/wb-black.png?raw=true">
-      <img src="https://github.com/ctrlplanedev/ctrlplane/blob/main/assets/trusted-by/wb-white.png?raw=true" height="100" alt="Weights & Biases">
-    </picture>
-  </a>
-</p>
+### Option 1: Full Stack Deployment
 
-## :zap: Installation
+If you haven't deployed any components yet, use the full stack deployment script:
 
-The easiest way to get started with Ctrlplane is by creating a [Ctrlplane
-Cloud](https://app.ctrlplane.dev) account.
+```bash
+# Make the script executable
+chmod +x deploy-stack.sh
 
-If you would like to self-host Plane, please see our [deployment guide](https://docs.ctrlplane.dev/install/helm).
+# Run the deployment script
+./deploy-stack.sh
+```
 
-| Installation methods | Docs link                                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Docker               | [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://docs.ctrlplane.dev/self-hosted/methods/docker-compose)         |
-| Kubernetes           | [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://docs.ctrlplane.dev/self-hosted/methods/kubernetes) |
+This will:
+1. Clone all repositories
+2. Set up each component
+3. Create Docker Compose configuration
+4. Provide instructions for starting the stack
 
-## 🛠️ Quick start for contributors
+### Option 2: Essential Components Deployment
 
-> Development system must have docker engine installed and running.
+If you've already deployed ctrlplane and ctrlc-cli, use the essential components deployment script:
 
-1. Clone the code locally using:
-   ```
-   git clone https://github.com/ctrlplanedev/ctrlplane.git
-   ```
-2. Switch to the code folder:
-   ```
-   cd ctrlplane
-   ```
-3. Create your feature or fix branch you plan to work on using:
-   ```
-   cp .env.example .env
-   pnpm install 
-   pnpm build
-   ```
-6. Run the docker command to initiate services:
-   ```
-   docker compose -f docker-compose.dev.yaml up -d
-   ```
-7. `cd packages/db && pnpm migrate && cd ../..` to run the migrations.
-8. Run `pnpm dev` to start the development server.
+```bash
+# Make the script executable
+chmod +x deploy-essential.sh
 
-You are ready to make changes to the code. Do not forget to refresh the browser
-(in case it does not auto-reload).
+# Run the deployment script
+./deploy-essential.sh
+```
 
-Thats it!
+This will:
+1. Clone the remaining repositories (weave, probot, pkg.pr.new, tldr, co-reviewer)
+2. Set up each component
+3. Create Docker Compose configuration for the essential components
+4. Provide an integration script to register services with ctrlplane
 
-## 🤝 Design Partners Wanted!
+## Configuration Options
 
-**We're actively seeking design partners** to collaborate on shaping the future
-of Ctrlplane. If your organization is looking to improve deployment workflows
-and would like early access to new features while providing valuable feedback,
-we'd love to hear from you!
+Both scripts accept the following command-line options:
 
-- Get priority support and feature development
-- Influence product roadmap decisions
-- Receive white-glove onboarding assistance
-- Join our exclusive design partner community
+- `--workspace <directory>`: Specify the workspace directory (default: ./zeeeepa-stack or ./zeeeepa-essential)
+- `--skip-existing`: Skip setup for existing components
 
-**Interested?** Email us at support@ctrlplane.dev to discuss how we can work
-together.
+Example:
+```bash
+./deploy-stack.sh --workspace /path/to/workspace --skip-existing
+```
 
-## :heart: Community
+## Docker Compose Configuration
 
-The Ctrlplane community can be found on [GitHub
-Discussions](https://github.com/ctrlplanedev/ctrlplane/discussions), and our [Discord
-server](https://ctrlplane.dev/discord)
+The deployment scripts generate Docker Compose configurations:
 
-Ask questions, report bugs, join discussions, voice ideas, make feature
-requests, or share your projects.
+- `docker-compose.stack.yaml`: Configuration for the entire stack
+- `docker-compose.essential.yaml`: Configuration for the essential components
 
-![Alt](https://repobeats.axiom.co/api/embed/354918f3c89424e9615c77d36b62aaeb67d9b7fb.svg "Repobeats analytics image")
+To start the stack using Docker Compose:
 
-## ⛓️ Security
+```bash
+# For the full stack
+docker-compose -f docker-compose.stack.yaml up -d
 
-If you believe you have found a security vulnerability in Plane, we encourage
-you to responsibly disclose this and not open a public issue. We will
-investigate all legitimate reports.
+# For the essential components
+docker-compose -f docker-compose.essential.yaml up -d
+```
 
-Email security@ctrlplane.dev to disclose any security vulnerabilities.
+## Integration with Existing ctrlplane
 
-### We couldn't have done this without you.
+If you've already deployed ctrlplane and ctrlc-cli, you can integrate the essential components with your existing ctrlplane installation using the provided integration script:
 
-<a href="https://github.com/ctrlplanedev/ctrlplane/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ctrlplanedev/ctrlplane" />
-</a>
+```bash
+# Make the script executable
+chmod +x integrate-with-ctrlplane.sh
+
+# Run the integration script
+./integrate-with-ctrlplane.sh
+```
+
+## Component Details
+
+### ctrlplane
+
+A deployment orchestration tool that simplifies multi-cloud, multi-region, and multi-service deployments.
+
+- **Port**: 3000
+- **Dependencies**: PostgreSQL, Redis
+
+### ctrlc-cli
+
+CLI for ctrlplane, built with Go.
+
+### weave
+
+A toolkit for developing AI-powered applications, built by Weights & Biases.
+
+- **Port**: 3005
+- **Dependencies**: Python 3.9+
+
+### probot
+
+A framework for building GitHub Apps to automate and improve your workflow.
+
+- **Port**: 3002
+- **Dependencies**: Node.js
+
+### pkg.pr.new
+
+Continuous preview releases for libraries.
+
+- **Port**: 3003
+- **Dependencies**: Node.js, pnpm
+
+### tldr
+
+PR summarizer tool.
+
+- **Port**: 3004
+- **Dependencies**: Python 3.8+
+
+### co-reviewer
+
+Code review assistant.
+
+- **Port**: 3001
+- **Dependencies**: Node.js, pnpm
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Docker Compose not found**: Install Docker Compose using your package manager or follow the [official installation guide](https://docs.docker.com/compose/install/).
+
+2. **Permission denied when running scripts**: Make the scripts executable with `chmod +x script-name.sh`.
+
+3. **Port conflicts**: If you have services already running on the specified ports, edit the Docker Compose files to use different ports.
+
+4. **Database connection issues**: Ensure PostgreSQL is running and accessible. Check the connection string in the environment variables.
+
+### Logs
+
+To view logs for a specific service:
+
+```bash
+docker-compose -f docker-compose.stack.yaml logs -f service-name
+```
+
+Replace `service-name` with one of: ctrlplane-api, ctrlplane-worker, co-reviewer, probot, pkg-pr-new, tldr, weave.
+
+## Maintenance
+
+### Updating Components
+
+To update a component to the latest version:
+
+1. Navigate to the component's directory
+2. Pull the latest changes: `git pull`
+3. Rebuild the Docker image: `docker-compose -f ../docker-compose.stack.yaml build service-name`
+4. Restart the service: `docker-compose -f ../docker-compose.stack.yaml up -d service-name`
+
+### Backup and Restore
+
+The PostgreSQL and Redis data are stored in Docker volumes. To backup these volumes:
+
+```bash
+# Backup PostgreSQL data
+docker run --rm -v zeeeepa-stack_postgres-data:/data -v $(pwd):/backup alpine tar -czf /backup/postgres-backup.tar.gz /data
+
+# Backup Redis data
+docker run --rm -v zeeeepa-stack_redis-data:/data -v $(pwd):/backup alpine tar -czf /backup/redis-backup.tar.gz /data
+```
+
+To restore from backups:
+
+```bash
+# Restore PostgreSQL data
+docker run --rm -v zeeeepa-stack_postgres-data:/data -v $(pwd):/backup alpine sh -c "rm -rf /data/* && tar -xzf /backup/postgres-backup.tar.gz -C /"
+
+# Restore Redis data
+docker run --rm -v zeeeepa-stack_redis-data:/data -v $(pwd):/backup alpine sh -c "rm -rf /data/* && tar -xzf /backup/redis-backup.tar.gz -C /"
+```
+
+## License
+
+Each component is subject to its own license. Please refer to the LICENSE file in each component's repository.
+
