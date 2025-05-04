@@ -84,11 +84,14 @@ check_version() {
     local current_version="$2"
     local required_version="$3"
     
-    if version_lt "$current_version" "$required_version"; then
-        echo -e "${YELLOW}Warning: $command_name version $current_version is less than the recommended version ($required_version).${NC}"
-        if ! confirm_continue "Continue anyway?"; then
-            return 1
-        fi
+    read -p "$1 (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[YyNn]$ ]]; then
+        echo "Invalid input. Please answer 'y' or 'n'."
+        confirm_continue "$1"
+        return 1
+    fi
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     else
         log "$command_name version $current_version meets requirements (>= $required_version)"
     fi
