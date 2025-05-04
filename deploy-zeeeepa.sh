@@ -142,10 +142,12 @@ wait_for_service() {
     
     echo -e "Waiting for $service_name to be ready..."
     local attempts=0
-    while ! check_port "$port"; do
-        attempts=$((attempts + 1))
-        if [ "$attempts" -ge "$max_attempts" ]; then
             echo -e "${RED}Error: $service_name did not start within the expected time.${NC}"
+            # Add the following lines to capture and display the error message
+            if docker logs $service_name &> /tmp/docker_log.txt; then
+              echo "Last lines of docker log:"
+              tail /tmp/docker_log.txt
+            fi
             return 1
         fi
         echo -n "."
