@@ -452,9 +452,13 @@ main() {
             else
                 # Start Docker services
                 echo "Starting Docker services..."
+                # Start Docker services
+                echo "Starting Docker services..."
                 if ! docker compose -f docker-compose.dev.yaml up -d; then
-                    echo -e "${RED}Error: Failed to start Docker services for ctrlplane.${NC}"
+                    docker_error=$?
+                    echo -e "${RED}Error: Failed to start Docker services for ctrlplane. Docker compose exited with code $docker_error.${NC}"
                     FAILED_COMPONENTS+=("ctrlplane-docker")
+                else
                 else
                     # Run database migrations
                     echo "Running database migrations..."
