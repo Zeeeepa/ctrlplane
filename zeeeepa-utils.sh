@@ -175,6 +175,11 @@ deploy_repo() {
             echo -e "${YELLOW}Warning: Branch $branch does not exist in repository $repo_name. Cloned default branch instead.${NC}"
         fi
         cd "$repo_name"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Failed to change directory to $repo_name.${NC}"
+            FAILED_COMPONENTS+=("$repo_name")
+            return 1
+        fi
     fi
     
     # Verify repository integrity
