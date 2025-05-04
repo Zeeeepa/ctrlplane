@@ -60,11 +60,7 @@ log() {
 
 # Function to check if a command exists
 check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        echo -e "${RED}Error: $1 is required but not installed.${NC}"
-        return 1
-    fi
-    return 0
+    echo -e "${RED}Error: $1 is required but not installed. Please install it using your system's package manager (e.g., apt, yum, brew).${NC}"
 }
 
 # Function to check if user wants to continue after a warning
