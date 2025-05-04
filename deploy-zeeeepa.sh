@@ -387,7 +387,16 @@ main() {
     
     # Check pnpm version
     PNPM_VERSION=$(pnpm --version)
+    # Check pnpm version
+    PNPM_VERSION=$(pnpm --version)
     if ! check_version "pnpm" "$PNPM_VERSION" "$PNPM_MIN_VERSION"; then
+        exit 1
+    fi
+
+    # Check pnpm major version
+    PNPM_MAJOR_VERSION=$(echo $PNPM_VERSION | cut -d '.' -f 1)
+    if [ "$PNPM_MAJOR_VERSION" -ne "10" ]; then
+        echo -e "${RED}Error: Incompatible pnpm major version. Please use pnpm version 10.x.x${NC}"
         exit 1
     fi
     
