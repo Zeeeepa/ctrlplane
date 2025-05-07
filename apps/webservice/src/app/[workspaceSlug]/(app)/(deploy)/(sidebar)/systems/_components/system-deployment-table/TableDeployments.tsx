@@ -37,11 +37,7 @@ const EnvHeader: React.FC<{
   environment: SCHEMA.Environment;
   workspace: SCHEMA.Workspace;
 }> = ({ systemSlug, environment: env, workspace }) => {
-  const filter = env.resourceSelector ?? undefined;
-  const { data, isLoading } = api.resource.byWorkspaceId.list.useQuery(
-    { workspaceId: workspace.id, filter, limit: 0 },
-    { enabled: filter != null },
-  );
+  const { data, isLoading } = api.environment.resources.useQuery(env.id);
   const total = data?.total ?? 0;
 
   const systemUrls = urls.workspace(workspace.slug).system(systemSlug);
@@ -211,7 +207,7 @@ const DeploymentTable: React.FC<{
                   <LazyDeploymentEnvironmentCell
                     environment={env}
                     deployment={r}
-                    systemSlug={system.slug}
+                    system={system}
                   />
                 </TableCell>
               ))}

@@ -68,6 +68,11 @@ export enum Permission {
   ResourceMetadataGroupUpdate = "resourceMetadataGroup.update",
   ResourceMetadataGroupDelete = "resourceMetadataGroup.delete",
 
+  ResourceRelationshipRuleCreate = "resourceRelationshipRule.create",
+  ResourceRelationshipRuleUpdate = "resourceRelationshipRule.update",
+  ResourceRelationshipRuleDelete = "resourceRelationshipRule.delete",
+  ResourceRelationshipRuleList = "resourceRelationshipRule.list",
+
   DeploymentCreate = "deployment.create",
   DeploymentUpdate = "deployment.update",
   DeploymentGet = "deployment.get",
